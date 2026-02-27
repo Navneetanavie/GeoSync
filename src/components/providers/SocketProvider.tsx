@@ -20,10 +20,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const socketInstance = new (ClientIO as unknown as new (opt: any) => Socket)({
-      path: "/api/socket",
-      addTrailingSlash: false,
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:5001";
+    const socketInstance = ClientIO(socketUrl, {
+      transports: ["websocket"],
     });
 
     socketInstance.on("connect", () => {
