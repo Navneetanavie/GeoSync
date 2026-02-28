@@ -29,6 +29,7 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
 
   const { socket, isConnected } = useSocket();
   const mapRef = useRef<google.maps.Map | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const [lat, setLat] = useState(defaultCenter.lat);
   const [lng, setLng] = useState(defaultCenter.lng);
@@ -37,6 +38,7 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
 
   // For viewers, to handle manual override vs synced viewing
   const [isSynced, setIsSynced] = useState(true);
+  const [trackerState, setTrackerState] = useState({ lat: defaultCenter.lat, lng: defaultCenter.lng, zoom: 14, tilt: 0 });
   const lastUpdateFromSocket = useRef<number>(0);
   const emittedUpdateAt = useRef<number>(0);
 
@@ -84,10 +86,12 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
       if (role === "tracked") {
         setTrackerIsActive(true);
         lastUpdateFromSocket.current = Date.now();
-        setLat(data.lat);
-        setLng(data.lng);
-        setZoom(data.zoom);
-        setTilt(data.tilt || 0);
+        setTrackerState({
+          lat: data.lat,
+          lng: data.lng,
+          zoom: data.zoom,
+          tilt: data.tilt || 0
+        });
 
         if (isSynced && mapRef.current) {
           // Programmatically move map without triggering user-interaction overrides
@@ -152,19 +156,47 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
         });
         console.log("Tracker emitting:", currentLat, currentLng);
       }
-    } else {
-      // Tracked user is changing the map manually.
-      // If we didn't just receive a socket event in the last 200ms, they are manually moving it.
-      const timeSinceLastSocketEvent = Date.now() - lastUpdateFromSocket.current;
-      if (timeSinceLastSocketEvent > 200 && isSynced) {
-        setIsSynced(false);
-      }
     }
-    console.log("Map changed:", lat, lng);
-  }, [role, socket, isConnected, roomId, isSynced]);
+    console.log("Map changed:", currentLat, currentLng);
+  }, [role, socket, isConnected, roomId]);
+
+  const handleUserInteraction = useCallback(() => {
+    if (role === "tracked" && isSynced) {
+      setIsSynced(false);
+    }
+  }, [role, isSynced]);
+
+  // Add wheel event listener for trackpad panning
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Trackpad pinch-to-zoom or Ctrl+Scroll sets e.ctrlKey to true
+      if (!e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop Google Maps from zooming natively
+        if (mapRef.current) {
+          mapRef.current.panBy(e.deltaX, e.deltaY);
+          handleUserInteraction();
+        }
+      }
+    };
+
+    // Use capture phase to intercept before Google Maps
+    el.addEventListener("wheel", handleWheel, { passive: false, capture: true });
+    return () => {
+      el.removeEventListener("wheel", handleWheel, { capture: true } as any);
+    };
+  }, [handleUserInteraction]);
 
   const handleResync = () => {
     setIsSynced(true);
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat: trackerState.lat, lng: trackerState.lng });
+      mapRef.current.setZoom(trackerState.zoom);
+      mapRef.current.setTilt(trackerState.tilt || 0);
+    }
     // Request an immediate update instead of waiting for next tick
     if (socket && isConnected) {
       socket.emit("request-sync", { roomId });
@@ -209,12 +241,22 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
     );
   }
 
+  const isMismatched = role === "tracked" && trackerIsActive && (
+    Math.abs(lat - trackerState.lat) > 0.0005 ||
+    Math.abs(lng - trackerState.lng) > 0.0005 ||
+    Math.abs(zoom - trackerState.zoom) > 0.5
+  );
+
   return (
-    <div className="w-full h-full relative">
+    <div
+      ref={wrapperRef}
+      className="w-full h-full relative"
+      onTouchStartCapture={handleUserInteraction}
+    >
       <HUD role={role} lat={lat} lng={lng} zoom={zoom} trackerActive={trackerIsActive} />
 
       {/* Resync Button for off-sync tracked users */}
-      {role === "tracked" && !isSynced && trackerIsActive && (
+      {role === "tracked" && !isSynced && trackerIsActive && isMismatched && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
           <button
             onClick={handleResync}
@@ -246,13 +288,15 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
         onLoad={onMapLoad}
         onBoundsChanged={onMapChange}
         onIdle={onMapChange}
+        onDragStart={handleUserInteraction}
+        onDblClick={handleUserInteraction}
         options={{
           disableDefaultUI: false,
           zoomControl: role === "tracker",
           streetViewControl: false,
           mapTypeControl: false,
           tilt: 0,
-          gestureHandling: role === "tracker" ? "auto" : "greedy", // Allow tracked to move it if they want
+          gestureHandling: "greedy", // Allow scrolling for everyone
         }}
       />
     </div>
