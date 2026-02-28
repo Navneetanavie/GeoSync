@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GeoSync V2
 
-## Getting Started
+A real-time dual-sided map synchronization platform utilizing WebSockets and Google Maps API to instantly share map viewing states between users.
 
-First, run the development server:
+## The Connection System
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Users must be able to join a "Session" or "Room" using a unique ID.
+* The screen provides two options at first: **Join as Master** and **Join as Viewer**.
+* **For Master:** Shows a link and a session ID to copy. When the Master clicks on proceed, it leads them to the map screen.
+* **For Viewer (via Link):** If they open the direct link, they are routed straight to the map screen.
+* **For Viewer (via UI):** If they click "Join as Viewer", an input field appears to enter the session ID, followed by a button to proceed to the map screen.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Upon joining, the system assigns (or allows selection of) two roles:
+1. **The Tracker (Master):** Controls the map movement broadcast source.
+2. **The Tracked (Viewer):** Observes the movement natively.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Dual-Sided Synchronization
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+* **Active Sync:** When the "Tracker" pans, tilts, or zooms their map, the "Tracked" user’s map instantly updates to match the exact coordinates (lat, lng), tilt, and zoom level.
+* **Passive Feedback:** The "Tracked" user still operates a functional map (able to pan, tilt, zoom locally), but their manual movements decouple them and do not override the Tracker's position. A **"Re-sync"** button appears for the viewer when disconnected to snap them back to the exact screen (lat, lng, and zoom level) of the master.
+* **Socket Integration:** All map interactions are emitted via sockets to ensure real-time latency is kept under 100ms.
 
-## Learn More
+## Architecture
 
-To learn more about Next.js, take a look at the following resources:
+* **Frontend:** Next.js Application
+* **Socket Server:** Maintained in a separate repository at [GeoSyncSocketServer](https://github.com/Navneetanavie/GeoSyncSocketServer) handling low-latency WebSocket communication.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tech Stack Used
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+* **Frontend Framework:** Next.js, React.js
+* **Styling:** TailwindCSS, Lucide React (for UI Icons)
+* **Real-time Communication:** Socket.io, Socket.io-client
+* **Mapping Engine:** Google Maps API (`@react-google-maps/api`)
+* **Utilities:** Framer Motion (assuming used for animations), clsx/tailwind-merge
+* **Backend:** Node.js, Express.js (for the remote Socket Server)
