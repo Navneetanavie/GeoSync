@@ -16,13 +16,12 @@ const mapContainerStyle = {
   height: "100%",
 };
 
-// Default center: San Francisco for a good visual start
 const defaultCenter = {
   lat: 37.7749,
   lng: -122.4194,
 };
 
-export function MapInterface({ roomId, role }: MapInterfaceProps) {
+export const MapInterface = ({ roomId, role }: MapInterfaceProps) => {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
   });
@@ -36,19 +35,18 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
   const [zoom, setZoom] = useState(14);
   const [tilt, setTilt] = useState(0);
 
-  // For viewers, to handle manual override vs synced viewing
   const [isSynced, setIsSynced] = useState(true);
   const [trackerState, setTrackerState] = useState({ lat: defaultCenter.lat, lng: defaultCenter.lng, zoom: 14, tilt: 0 });
   const lastUpdateFromSocket = useRef<number>(0);
   const emittedUpdateAt = useRef<number>(0);
 
-  const [trackerIsActive, setTrackerIsActive] = useState(false);
+  const trackerIsActiveState = useState(false);
+  const trackerIsActive = trackerIsActiveState[0];
+  const setTrackerIsActive = trackerIsActiveState[1];
 
-  // Setup Socket Listeners
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    // Join the room
     socket.emit("join-room", { roomId, role });
 
     socket.on("tracker-active", () => {
@@ -63,7 +61,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
 
     socket.on("force-sync-publish", () => {
       if (role === "tracker" && mapRef.current) {
-        // Broadcast our current position immediately
         const currentCenter = mapRef.current.getCenter();
         if (currentCenter) {
           socket.emit("sync-map", {
@@ -77,7 +74,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
       }
     });
 
-    // Request initial state from tracker when joining as a viewer
     if (role === "tracked") {
       socket.emit("request-sync", { roomId });
     }
@@ -94,7 +90,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
         });
 
         if (isSynced && mapRef.current) {
-          // Programmatically move map without triggering user-interaction overrides
           mapRef.current.panTo({ lat: data.lat, lng: data.lng });
           if (mapRef.current.getZoom() !== data.zoom) {
             mapRef.current.setZoom(data.zoom);
@@ -116,15 +111,12 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
     };
   }, [socket, isConnected, roomId, role]);
 
-  // Handle map loading
   const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
-    // Set initial tilt if map type supports it
     map.setTilt(tilt);
-    map.setMapTypeId("roadmap"); // roadmap or satellite for 3D buildings usually
+    map.setMapTypeId("roadmap");
   }, [tilt]);
 
-  // Map change handlers (only tracker emits these, tracked catches them for manual override check)
   const onMapChange = useCallback(() => {
     if (!mapRef.current) return;
 
@@ -136,14 +128,12 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
     const currentZoom = mapRef.current.getZoom() || 14;
     const currentTilt = mapRef.current.getTilt() || 0;
 
-    // Update local state for HUD
     setLat(currentLat);
     setLng(currentLng);
     setZoom(currentZoom);
     setTilt(currentTilt);
 
     if (role === "tracker") {
-      // Throttle emissions to max once every ~80ms (approx 12fps update)
       const now = Date.now();
       if (now - emittedUpdateAt.current > 80 && socket && isConnected) {
         emittedUpdateAt.current = now;
@@ -166,16 +156,14 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
     }
   }, [role, isSynced]);
 
-  // Add wheel event listener for trackpad panning
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Trackpad pinch-to-zoom or Ctrl+Scroll sets e.ctrlKey to true
       if (!e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        e.stopPropagation(); // Stop Google Maps from zooming natively
+        e.stopPropagation();
         if (mapRef.current) {
           mapRef.current.panBy(e.deltaX, e.deltaY);
           handleUserInteraction();
@@ -183,7 +171,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
       }
     };
 
-    // Use capture phase to intercept before Google Maps
     el.addEventListener("wheel", handleWheel, { passive: false, capture: true });
     return () => {
       el.removeEventListener("wheel", handleWheel, { capture: true } as any);
@@ -197,7 +184,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
       mapRef.current.setZoom(trackerState.zoom);
       mapRef.current.setTilt(trackerState.tilt || 0);
     }
-    // Request an immediate update instead of waiting for next tick
     if (socket && isConnected) {
       socket.emit("request-sync", { roomId });
     }
@@ -209,8 +195,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
       mapRef.current.setZoom(14);
       mapRef.current.setTilt(0);
 
-      // Because this is programmatic, it might not fire the user-driven 'idle' natively fast enough,
-      // so manually trigger a broadcast to keep it exactly in sync over socket.
       if (socket && isConnected) {
         socket.emit("sync-map", {
           roomId,
@@ -255,7 +239,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
     >
       <HUD role={role} lat={lat} lng={lng} zoom={zoom} trackerActive={trackerIsActive} />
 
-      {/* Resync Button for off-sync tracked users */}
       {role === "tracked" && !isSynced && trackerIsActive && isMismatched && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
           <button
@@ -268,7 +251,6 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
         </div>
       )}
 
-      {/* Reset Button for Master users */}
       {role === "tracker" && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
           <button
@@ -283,7 +265,7 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
 
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
-        center={{ lat, lng }} // Initial center, tracking handles updates via mapRef.panTo
+        center={{ lat, lng }}
         zoom={zoom}
         onLoad={onMapLoad}
         onBoundsChanged={onMapChange}
@@ -296,9 +278,9 @@ export function MapInterface({ roomId, role }: MapInterfaceProps) {
           streetViewControl: false,
           mapTypeControl: false,
           tilt: 0,
-          gestureHandling: "greedy", // Allow scrolling for everyone
+          gestureHandling: "greedy",
         }}
       />
     </div>
   );
-}
+};

@@ -11,18 +11,17 @@ interface HUDProps {
   trackerActive?: boolean;
 }
 
-export function HUD({ role, lat, lng, zoom, trackerActive = true }: HUDProps) {
+export const HUD = ({ role, lat, lng, zoom, trackerActive = true }: HUDProps) => {
   const { isConnected } = useSocket();
 
   return (
     <div className="absolute top-4 left-4 right-4 md:right-auto md:w-80 space-y-3 z-10 pointer-events-none">
-      {/* Role Badge */}
       <div className="flex items-center gap-2">
         <div className={`px-4 py-2 rounded-full flex items-center gap-2 shadow-lg backdrop-blur-md border ${role === "tracker"
-            ? "bg-blue-600/80 border-blue-400 text-white"
-            : !trackerActive
-              ? "bg-orange-600/80 border-orange-400 text-white"
-              : "bg-teal-600/80 border-teal-400 text-white"
+          ? "bg-blue-600/80 border-blue-400 text-white"
+          : !trackerActive
+            ? "bg-orange-600/80 border-orange-400 text-white"
+            : "bg-teal-600/80 border-teal-400 text-white"
           }`}>
           {role === "tracker" ? (
             <Radio className="w-4 h-4 animate-pulse" />
@@ -40,14 +39,12 @@ export function HUD({ role, lat, lng, zoom, trackerActive = true }: HUDProps) {
           </span>
         </div>
 
-        {/* Connection Status */}
         <div className={`p-2 rounded-full shadow-lg backdrop-blur-md border ${isConnected ? "bg-green-500/20 border-green-500/50 text-green-400" : "bg-red-500/20 border-red-500/50 text-red-400"
           }`}>
           {isConnected ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
         </div>
       </div>
 
-      {/* Stats Panel */}
       <div className="bg-slate-900/80 backdrop-blur-md border border-slate-700 rounded-xl p-4 shadow-2xl font-mono text-slate-300 pointer-events-auto">
         <div className="grid grid-cols-2 gap-4">
           <div>
